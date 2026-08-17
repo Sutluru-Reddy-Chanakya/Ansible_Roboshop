@@ -1,0 +1,39 @@
+- name: create ec2 and r53 records
+  hosts: all
+  connection: local
+  vars:
+    sg_id: "sg-080072874ce068822"
+    ami_id: "ami-0220d79f3f480ecf5"
+    env: "dev"
+    instances:
+    - mongodb
+     - catalogue
+  tasks:
+    - name: create ec2 instance
+      amazon.aws.ec2_instance:
+        Name: "{{ item }}-{{ env }}"
+        instance_type: t3.micro
+        image_id: "{{ ami_id }}"
+        security_groups: "{{ sg_id }}"
+       
+        instance_tags:
+          Project: roboshop
+          Component: "{{ item }}"
+          env: "{{ env }}"
+          Name: "{{ item }}-{{ env }}"
+
+      loop: "{{ instances }}"
+      
+      register: ec2_output
+
+    - name: print the output
+      ansible.builtin.debug:
+        msg: "{{ ec2_output }}"
+
+    # - name: create r53 record
+    #   amazon.aws.route53:
+    #     zone: "devops4u.com"
+    #     record: "roboshop.{{ env }}.devops4u.com"
+    #     type: A
+    #     ttl: 300
+    #     value: "{{ ec2.instances[0].public_ip_address }}"
