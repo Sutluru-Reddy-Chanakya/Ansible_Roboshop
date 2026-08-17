@@ -39,5 +39,17 @@
         type: A
         ttl: 1
         value: "{{ item.instances[0].private_ip_address}}"
+      loop: "{{ ec2_output.results }}"
+
+    - name: create r53 record
+      amazon.aws.route53:
+        zone: "{{ domain_name }}"
+        state: present
+        record: "roboshop-{{ env }}.{{ domain_name }}"
+        type: A
+        ttl: 1
+        value: "{{ item.instances[0].public_ip_address}}"
+        when: "{{ item.item == 'frontend' }}"
+
 
       loop: "{{ ec2_output.results }}"
