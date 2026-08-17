@@ -4,10 +4,11 @@
   vars:
     sg_id: "sg-080072874ce068822"
     ami_id: "ami-0220d79f3f480ecf5"
+    domain_name: "cineniti.in"
     env: "dev"
     instances:
     - mongodb
-     - catalogue
+    - catalogue
   tasks:
     - name: create ec2 instance
       amazon.aws.ec2_instance:
@@ -20,7 +21,7 @@
           Project: roboshop
           Component: "{{ item }}"
           env: "{{ env }}"
-          Name: "{{ item }}-{{ env }}"
+          Name: "Roboshop-{{ item }}-{{ env }}"
 
       loop: "{{ instances }}"
       
@@ -30,10 +31,12 @@
       ansible.builtin.debug:
         msg: "{{ ec2_output }}"
 
-    # - name: create r53 record
-    #   amazon.aws.route53:
-    #     zone: "devops4u.com"
-    #     record: "roboshop.{{ env }}.devops4u.com"
-    #     type: A
-    #     ttl: 300
-    #     value: "{{ ec2.instances[0].public_ip_address }}"
+    - name: create r53 record
+      amazon.aws.route53:
+        zone: "{{ domain_name }}"
+        record: "{{ item.item }}-{{ env }}.{{ domain_name }}"
+        type: A
+        ttl: 1
+        value: "{{ item.instance.[0].private_ip_address}}"
+
+      loop: "{{ ec2_output.results }}"
