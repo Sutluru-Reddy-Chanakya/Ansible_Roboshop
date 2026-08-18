@@ -1,11 +1,17 @@
+# ansible-playbook -i localhost,   -e '{"instances":["mongodb","catalogue","redis","user","cart","mysql","shipping","rabbitmq","payment","frontend"]}'   -e action=create   roboshop.yml
+# ansible-playbook -i localhost,   -e '{"instances":["mongodb","catalogue","redis","user","cart","mysql","shipping","rabbitmq","payment","frontend"]}'   -e action=destroy  roboshop.yml
+
 - name: create ec2 and r53 records
   hosts: all
   connection: local
+
   vars:
     sg_id: "sg-080072874ce068822"
     ami_id: "ami-0220d79f3f480ecf5"
     domain_name: "cineniti.in"
     env: "dev"
+    when: create
+    override: true
     instances:
     - frontend
     - mongodb
@@ -26,12 +32,13 @@
           Name: "Roboshop-{{ item }}-{{ env }}"
 
       loop: "{{ instances }}"
-      
       register: ec2_output
+      when: action == "create"
 
     - name: print the output
       ansible.builtin.debug:
         msg: "{{ ec2_output }}"
+      when: action == "create"
 
     - name: create r53 record
       amazon.aws.route53:
@@ -42,6 +49,7 @@
         ttl: 1
         value: "{{ item.instances[0].private_ip_address}}"
       loop: "{{ ec2_output.results }}"
+      when: action == "create"
 
     - name: create r53 record
       amazon.aws.route53:
@@ -51,7 +59,25 @@
         type: A
         ttl: 1
         value: "{{ item.instances[0].public_ip_address}}"
-      when: item.item == "frontend"
-
-
       loop: "{{ ec2_output.results }}"
+
+      when: 
+       - item.item == "frontend"
+       - action == "create"
+
+- name: delete ec2 instance
+  amazon.aws.ec2_instance:
+    name: "{{ item }}-{{ env }}"
+    state: absent
+  loop: "{{ instances }}"
+  when: action == "destroy"
+
+- name: delete r53 record
+  amazon.aws.route53:
+    zone: "{{ domain_name }}"
+    state: absent
+    record: "{{ item }}-{{ env }}.{{ domain_name }}"
+    type: A
+  loop: "{{ instances }}"
+  when: action == "destroy"
+  wait: true
