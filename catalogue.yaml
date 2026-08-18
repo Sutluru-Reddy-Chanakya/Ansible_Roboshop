@@ -53,3 +53,22 @@
     ansible.builtin.copy:
       src: catalogue.service
       dest: /etc/systemd/system/catalogue.service
+
+  - name: copy mongo repo
+    ansible.builtin.copy:
+      src: mongo.repo
+      dest: /etc/yum.repos.d/mongo.repo
+  
+  - name: install mongodb client
+    ansible.builtin.dnf:
+      name: mongodb-org-shell
+      state: present
+
+  - name : check products loaded
+    ansible.builtin.shell: "mongo --host {{ mongodb_host }} --eval 'db.getSiblingDB(\"catalogue\").products.find().count()'"
+    register: catalogue_products_count
+  
+  - name: print the output
+    ansible.builtin.debug:
+      msg: "{{ catalogue_products_count}}"
+      
