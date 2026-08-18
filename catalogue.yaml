@@ -70,3 +70,7 @@
   - name: print the output
     ansible.builtin.debug:
       msg: "{{ catalogue_output }}"
+
+  - name : load products if not loaded
+    ansible.builtin.command: mongosh --host "{{ MONGODB_HOST }}"  </app/db/master-data.js
+    when: catalogue_output.stdout  < 0
