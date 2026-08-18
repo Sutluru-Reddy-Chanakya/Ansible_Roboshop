@@ -18,66 +18,83 @@
     - catalogue
   
   tasks:
-    - name: create ec2 instance
-      amazon.aws.ec2_instance:
-        name: "{{ item }}-{{ env }}"
-        instance_type: t3.micro
-        image_id: "{{ ami_id }}"
-        security_groups: "{{ sg_id }}"
-       
-        tags:
-          Project: roboshop
-          Component: "{{ item }}"
-          env: "{{ env }}"
-          Name: "Roboshop-{{ item }}-{{ env }}"
+   tasks:
+  ### CREATE ###
+   - name: create ec2 instance
+     amazon.aws.ec2_instance:
+      instance_type: "t3.micro"
+      security_group: "{{ sg_id }}"
+      image_id: "{{ ami_id }}"
+      name: "{{ item }}-{{ env }}"
+      tags:
+        Project: roboshop
+        Component: "{{ item }}"
+        Environment: "{{ env }}"
+        Name: "{{ item }}-{{ env }}"
+     loop: "{{ instances }}"
+     register: ec2_output
+     when: action == "create"
 
-      loop: "{{ instances }}"
-      register: ec2_output
-      when: action == "create"
+   - name: print the output
+     ansible.builtin.debug:
+      msg: "{{ ec2_output }}"
+     when: action == "create"
 
-    - name: print the output
-      ansible.builtin.debug:
-        msg: "{{ ec2_output }}"
-      when: action == "create"
+   - name: create r53 records
+     amazon.aws.route53:
+      state: present
+      zone: "{{ domain_name }}"
+      record: "{{ item.item }}-{{ env }}.{{ domain_name }}" # mongodb-dev.daws88s.online, frontend-dev.daws88s.online
+      type: A
+      ttl: 1
+      value: "{{ item.instances[0].private_ip_address }}"
+      wait: false
+      overwrite: true
+     loop: "{{ ec2_output.results }}" # list
+     when: action == "create"
 
-    - name: create r53 record
-      amazon.aws.route53:
-        zone: "{{ domain_name }}"
-        state: present
-        record: "{{ item.item }}-{{ env }}.{{ domain_name }}"
-        type: A
-        ttl: 1
-        value: "{{ item.instances[0].private_ip_address}}"
-      loop: "{{ ec2_output.results }}"
-      when: action == "create"
+   - name: create r53 record for frontend
+     amazon.aws.route53:
+      state: present
+      zone: "{{ domain_name }}"
+      record: "roboshop-{{ env }}.{{ domain_name }}" # roboshop-dev.daws88s.online
+      type: A
+      ttl: 1
+      value: "{{ item.instances[0].public_ip_address }}"
+      wait: false
+      overwrite: true
+     loop: "{{ ec2_output.results }}"
+     when:  # and
+    - item.item == "frontend"
+    - action == "create"
 
-    - name: create r53 record
-      amazon.aws.route53:
-        zone: "{{ domain_name }}"
-        state: present
-        record: "roboshop-{{ env }}.{{ domain_name }}"
-        type: A
-        ttl: 1
-        value: "{{ item.instances[0].public_ip_address}}"
-      loop: "{{ ec2_output.results }}"
+  ### DESTROY ###
+   - name: delete r53 records for frontend
+     amazon.aws.route53:
+      state: absent
+      zone: "{{ domain_name }}"
+      record: "roboshop-{{ env }}.{{ domain_name }}" # roboshop-dev.daws88s.online
+      type: A
+      ttl: 1
+     loop: "{{ instances }}"
+     when:  # and
+     - item == "frontend"
+     - action == "destroy"
 
-      when: 
-       - item.item == "frontend"
-       - action == "create"
+   - name: delete r53 records
+     amazon.aws.route53:
+      state: absent
+      zone: "{{ domain_name }}"
+      record: "{{ item }}-{{ env }}.{{ domain_name }}" # roboshop-dev.daws88s.online
+      type: A
+      ttl: 1
+     loop: "{{ instances }}"
+     when: action == "destroy"
 
-- name: delete ec2 instance
-   amazon.aws.ec2_instance:
-  name: "{{ item }}-{{ env }}"
-  state: absent
-  loop: "{{ instances }}"
-  when: action == "destroy"
-
-- name: delete r53 record
-  amazon.aws.route53:
-    zone: "{{ domain_name }}"
-    state: absent
-    record: "{{ item }}-{{ env }}.{{ domain_name }}"
-    type: A
-  loop: "{{ instances }}"
-  when: action == "destroy"
-  wait: true
+   - name: delete ec2 instance
+     amazon.aws.ec2_instance:
+      state: absent
+      name: "{{ item }}-{{ env }}"
+      wait: false
+     loop: "{{ instances }}"
+     when: action == "destroy"
